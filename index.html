@@ -1,6 +1,6 @@
 
 
-<!-- 
+<!--
 参考
 https://www.codegrid.net/articles/2020-webxr-3/
 
@@ -94,6 +94,13 @@ const $button = document.getElementById( 'startButton' );
     // これにより、デバイスの傾きや位置を取得できるようになる。
     const referenceSpace = await xrSession.requestReferenceSpace( 'local' );
 
+    // 元コードは↓ ちょっと違う
+    // const referenceSpace = await xrSession.requestReferenceSpace(
+    //   'local',
+    //   { requiredFeatures: ['local', 'hit-test'] }
+    // );
+
+
     // ヒットテスト用の ray を作成する。
     // 以下の `hitTestInputReferenceSpace` は ray の開始位置となる。
     // 特にオフセットを指定していないので、視点の中心が ray の始点となるが、
@@ -123,6 +130,9 @@ const $button = document.getElementById( 'startButton' );
 
       // ヒットテストを実行する。
       if ( hitTestSource ) {
+
+      // 元コードは↓ ちょっと違う
+      // if ( hitTestSource && pose ) {
 
         const hitTestResults = xrFrame.getHitTestResults( hitTestSource );
 
