@@ -56,124 +56,132 @@ const $button = document.getElementById( 'startButton' );
       { requiredFeatures: [ 'local', 'hit-test' ] }
     );
 
-    // 本来は `getContext( 'webgl' )` で gl コンテキストを引き出す際に
-    // オプションとして「`xrCompatible: true`」を明示する必要がある。
-    // three.js では常に「`xrCompatible: true`」のオプションがついているので
-    // ここでは特別な設定をせずに XR として利用することができる
-    const renderer = new THREE.WebGLRenderer( { canvas: xrCanvas } );
-    renderer.autoClear = false;
-    renderer.setSize( width, height );
 
-    const gl = renderer.getContext();
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera();
-    camera.matrixAutoUpdate = false;
+// AR の xrSession を作成する。
+// ヒットテスト機能を有効にするために、`requiredFeatures` オプションで
+// `'hittest'` も合わせて渡す。
+const xrSession = await navigator.xr.requestSession(
+  'immersive-ar',
+  { requiredFeatures: [ 'local', 'hit-test' ] }
+);
 
-    scene.add( new THREE.GridHelper( 100, 100 ) );
+// 本来は `getContext( 'webgl' )` で gl コンテキストを引き出す際に
+// オプションとして「`xrCompatible: true`」を明示する必要がある。
+// three.js では常に「`xrCompatible: true`」のオプションがついているので
+// ここでは特別な設定をせずに XR として利用することができる
+const renderer = new THREE.WebGLRenderer( { canvas: xrCanvas } );
+renderer.autoClear = false;
+renderer.setSize( width, height );
 
-    const box = new THREE.Mesh(
-      new THREE.BoxBufferGeometry( .2, .2, .2 ),
-      new THREE.MeshNormalMaterial(),
-    );
-    scene.add( box );
+const gl = renderer.getContext();
 
-    const cone = new THREE.Mesh(
-      new THREE.ConeGeometry( 0.1, 0.5, 32, 32 ),
-      new THREE.MeshNormalMaterial(),
-    );
-    scene.add( cone );
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera();
+camera.matrixAutoUpdate = false;
 
-    // 「デバイスのカメラから取り込まれた現実の風景」の受け先となる、baseLayer を作る。
-    const xrWebGLLayer = new XRWebGLLayer( xrSession, gl );
-    // updateRenderState を設定していない場合、`xrSession.requestAnimationFrame` が呼ばれないので注意
-    xrSession.updateRenderState( { baseLayer: xrWebGLLayer } );
+scene.add( new THREE.GridHelper( 100, 100 ) );
 
-    // 「デバイスの姿勢（pose）」の参照先を作る
-    // これにより、デバイスの傾きや位置を取得できるようになる。
-    const referenceSpace = await xrSession.requestReferenceSpace(
-      'local',
-      { requiredFeatures: ['local', 'hit-test'] }
-    );
+const box = new THREE.Mesh(
+  new THREE.BoxBufferGeometry( .2, .2, .2 ),
+  new THREE.MeshNormalMaterial(),
+);
+scene.add( box );
 
-    // ヒットテスト用の Ray を作成する。
-    // 以下の `hitTestInputReferenceSpace` は Ray の開始位置となる。
-    // 特にオフセットを指定していないので、視点の中心が Ray の始点となるが、
-    // 必要に応じてずらすことも可能。
-    const hitTestInputReferenceSpace = await xrSession.requestReferenceSpace( 'viewer' );
-    const hitTestSource = await xrSession.requestHitTestSource( { space: hitTestInputReferenceSpace } );
+const cone = new THREE.Mesh(
+  new THREE.ConeGeometry( 0.1, 0.5, 32, 32 ),
+  new THREE.MeshNormalMaterial(),
+);
+scene.add( cone );
 
-    // `window.requestAnimationFrame` ではなく、
-    // セッションの `requestAnimationFrame` に応じて描画する。
-    // 理由は以下の通り。
-    //
-    // - `window.requestAnimationFrame` の FPS はブラウザーの内部実装で最大 60 に抑えられているが、
-    //   `xrSession.requestAnimationFrame` はデバイスの画面リフレッシュレートにに応じる
-    // - `xrSession.requestAnimationFrame` では、第2引数として `xrFrame` を受け取ることができる。
-    //   `xrFrame` は `window.requestAnimationFrame` には存在しない。
-    xrSession.requestAnimationFrame( onDrawFrame );
+// 「デバイスのカメラから取り込まれた現実の風景」の受け先となる、baseLayer を作る。
+const xrWebGLLayer = new XRWebGLLayer( xrSession, gl );
+// updateRenderState を設定していない場合、`xrSession.requestAnimationFrame` が呼ばれないので注意
+xrSession.updateRenderState( { baseLayer: xrWebGLLayer } );
 
-    function onDrawFrame( timestamp, xrFrame ) {
+// 「デバイスの姿勢（pose）」の参照先を作る
+// これにより、デバイスの傾きや位置を取得できるようになる。
+const referenceSpace = await xrSession.requestReferenceSpace( 'local' );
 
-      xrSession.requestAnimationFrame( onDrawFrame );
-      // 姿勢を取り出す。行列（matrix）の要素が格納された配列で受け取ることができる。
-      const pose = xrFrame.getViewerPose( referenceSpace );
+// ヒットテスト用の ray を作成する。
+// 以下の `hitTestInputReferenceSpace` は ray の開始位置となる。
+// 特にオフセットを指定していないので、視点の中心が ray の始点となるが、
+// 必要に応じてずらすことも可能。
+const hitTestInputReferenceSpace = await xrSession.requestReferenceSpace( 'viewer' );
+const hitTestSource = await xrSession.requestHitTestSource( { space: hitTestInputReferenceSpace } );
 
-      // xrFrame からは、現在のセッション、とベースレイヤーを取り出すこともできる。
-      // xrFrame.session === xrSession;
-      // xrSession.renderState.baseLayer === xrWebGLLayer;
+// `window.requestAnimationFrame` ではなく、
+// セッションの `requestAnimationFrame` に応じて描画する。
+// 理由は以下の通り。
+//
+// - `window.requestAnimationFrame` の FPS はブラウザーの内部実装で最大 60 に抑えられているが、
+//   `xrSession.requestAnimationFrame` はデバイスの画面リフレッシュレートにに応じる
+// - `xrSession.requestAnimationFrame` では、第2引数として `xrFrame` を受け取ることができる。
+//   `xrFrame` は `window.requestAnimationFrame` には存在しない。
+xrSession.requestAnimationFrame( onDrawFrame );
 
-      // ヒットテストを実行する。
-      if ( hitTestSource && pose ) {
+function onDrawFrame( timestamp, xrFrame ) {
 
-        const hitTestResults = xrFrame.getHitTestResults( hitTestSource );
+  xrSession.requestAnimationFrame( onDrawFrame );
+  // 姿勢を取り出す。行列（matrix）の要素が格納された配列で受け取ることができる。
+  const pose = xrFrame.getViewerPose( referenceSpace );
 
-        // なにかにヒットしていたら、最初にヒットした平面の座標を取得する。
-        // 座標は pose として取得でき、その中に位置や角度が格納されている。
-        if ( hitTestResults.length > 0 ) {
+  // xrFrame からは、現在のセッション、とベースレイヤーを取り出すこともできる。
+  // xrFrame.session === xrSession;
+  // xrSession.renderState.baseLayer === xrWebGLLayer;
 
-          const pose = hitTestResults[ 0 ].getPose( referenceSpace );
+  // ヒットテストを実行する。
+  if ( hitTestSource ) {
 
-          cone.position.set(
-            pose.transform.position.x,
-            pose.transform.position.y,
-            pose.transform.position.z
-          );
-          cone.quaternion.set(
-            pose.transform.orientation.x,
-            pose.transform.orientation.y,
-            pose.transform.orientation.z,
-            pose.transform.orientation.w,
-          );
+    const hitTestResults = xrFrame.getHitTestResults( hitTestSource );
 
-        }
+    // なにかにヒットしていたら、最初にヒットした平面の座標を取得する。
+    // 座標は pose として取得でき、その中に位置や角度が格納されている。
+    if ( hitTestResults.length > 0 ) {
 
-      }
+      const pose = hitTestResults[ 0 ].getPose( referenceSpace );
 
-      // 現実の風景をWebGLのフレームバッファーに転写する
-      gl.bindFramebuffer( gl.FRAMEBUFFER, xrWebGLLayer.framebuffer );
-
-      if ( ! pose ) return;
-
-      // if the xrSession is for both right and left eyes, length of views would be 2.
-      // if not, length is 1,
-      pose.views.forEach( ( view ) => {
-
-        const viewport = xrWebGLLayer.getViewport( view );
-        renderer.setSize( viewport.width, viewport.height );
-
-        camera.matrix.fromArray( view.transform.matrix );
-        camera.projectionMatrix.fromArray( view.projectionMatrix );
-        camera.updateMatrixWorld( true );
-
-        renderer.clearDepth();
-        renderer.render( scene, camera );
-
-      } );
+      cone.position.set(
+        pose.transform.position.x,
+        pose.transform.position.y,
+        pose.transform.position.z
+      );
+      cone.quaternion.set(
+        pose.transform.orientation.x,
+        pose.transform.orientation.y,
+        pose.transform.orientation.z,
+        pose.transform.orientation.w,
+      );
 
     }
 
   }
+
+  // 現実の風景をWebGLのフレームバッファーに転写する
+  gl.bindFramebuffer( gl.FRAMEBUFFER, xrWebGLLayer.framebuffer );
+
+  if ( ! pose ) return;
+
+  // if the xrSession is for both right and left eyes, length of views would be 2.
+  // if not, length is 1,
+  pose.views.forEach( ( view ) => {
+
+    const viewport = xrWebGLLayer.getViewport( view );
+    renderer.setSize( viewport.width, viewport.height );
+
+    camera.matrix.fromArray( view.transform.matrix );
+    camera.projectionMatrix.fromArray( view.projectionMatrix );
+    camera.updateMatrixWorld( true );
+
+    renderer.clearDepth();
+    renderer.render( scene, camera );
+
+  } );
+
+}
+
+
+}
 
 } )();
 </script>
